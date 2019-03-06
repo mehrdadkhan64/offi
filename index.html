@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<title>Office configurator</title>
+	
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/4.0.5/handlebars.min.js"></script>
+	<script src="https://aframe.io/releases/0.7.0/aframe.min.js"></script>
+  	<script src="https://rawgit.com/tizzle/aframe-orbit-controls-component/master/dist/aframe-orbit-controls-component.min.js"></script> 
+	<!-- <script src="https://rawgit.com/archilogic-com/3dio-js/architectural-toolkit/build/3dio.js"></script> -->
+	<script src="https://dist.3d.io/3dio-js/1.x.x/3dio.min.js"></script>
+
+	<script src="aframe-template-component.js"></script>
+
+    <link rel="stylesheet" href="https://cdn.rawgit.com/ConnorAtherton/loaders.css/master/loaders.min.css"></head>
+	<link rel="stylesheet" href="style.css"></style>
+
+	<script>
+		Handlebars.registerHelper("add", function(lvalue, rvalue, options) {
+		    lvalue = parseFloat(lvalue);
+		    rvalue = parseFloat(rvalue);
+		        
+		    return lvalue + rvalue;
+		});
+	</script>
+
+</head>
+<body>
+
+	<div id="controls">
+		<h1>Configure office</h1>
+
+		<div>
+			<h3>Office type</h3>
+			<select id="office-template">
+				<option value="layout1.hbs" seleced="selected">One compartment</option>
+				<option value="layout2.hbs">Two compartments</option>
+				<option value="layout3.hbs">Three compartments</option>
+			</select>
+		</div>
+
+		<div class="slider-container">
+			<h3>Office size: <span id="slider-value">50</span>m<sup>2</sup></h3>
+			<input type="range" min="50" max="10000" value="50" class="slider" id="office-area">
+			<span class="anchor-left"><span id="area-min">50</span> m<sup>2</sup></span>	
+			<span class="anchor-right"><span id="area-max">10,000</span> m<sup>2</sup></span>
+		</div>
+		
+	</div>
+    <div id="scene-area">
+        <div class="overlay">
+            <div class="loader-inner square-spin">
+              <div></div>
+            </div>
+        </div>
+        <div id="scene-container">
+            <a-scene embedded io3d-lighting anti-alias="true" vr-mode-ui="enabled: false">
+
+                <a-entity id="office" template="src: layout1.hbs; type: handlebars" data-length="6.25"></a-entity>
+
+                <a-entity id="furniture"></a-entity>
+                <!-- <a-entity id="furniture" template="src: furniture.hbs; type: handlebars"></a-entity> -->
+
+                <a-entity id="target" position="5 0.1 3"></a-entity>
+                <a-entity id="cam" camera="fov: 50; zoom: 1;" position="0 10 10" orbit-controls="invertZoom: true; autoRotate: false; target: #target; enableDamping: true; dampingFactor: 0.1;minDistance:4;maxDistance:100;maxPolarAngle:1.8; enableKeys: true; autoVRLookCam: false; maxPolarAngle: 1.57"></a-entity>
+            </a-scene>
+        </div>
+    </div>
+    <script>
+
+    	var furnitureSetLength = 6;
+    	var furnitureZOffset = 0.2;
+    	var widths = {
+    		"layout1.hbs": 8,
+    		"layout2.hbs": 14,
+    		"layout3.hbs": 22,
+    	}
+        var maxAreas = {
+            "layout1.hbs": 1000,
+            "layout2.hbs": 2000,
+            "layout3.hbs": 3000,   
+        }
+    	var furnitureSetXPositions = {
+    		"layout1.hbs": [2.1],
+    		"layout2.hbs": [2.1, -6.2],
+    		"layout3.hbs": [2.1, -6.2, -14.5],
+    	}
+    	var minAreas = {
+    		"layout1.hbs": 50,
+    		"layout2.hbs": 85,
+    		"layout3.hbs": 135,
+    	};
+    	
+    	var doorPositions = [1];
+
+    	var templatePicker = document.querySelector("#office-template");
+    	templatePicker.addEventListener('change', function() {
+            updateLimits(templatePicker.value);
+    		reload(templatePicker.value, areaSlider.value);
+    	})
+    	var areaSlider = document.querySelector('#office-area');
+    	areaSlider.addEventListener('change', function() {
+    		reload(templatePicker.value, areaSlider.value);
+    	});
+        areaSlider.addEventListener('input', function() {
+            document.querySelector('#slider-value').textContent = withCommas(areaSlider.value);
+        })
+
+        updateLimits(templatePicker.value);
+    	reload(templatePicker.value, areaSlider.value);
+
+        function updateLimits(template) {
+            var minArea = minAreas[template];
+            var maxArea = maxAreas[template];
+            areaSlider.min = minArea;
+            areaSlider.max = maxArea;
+            document.querySelector('#area-min').textContent = minArea;
+            document.querySelector('#area-max').textContent = withCommas(maxArea);
+        }
+
+    	function reload(template, area) {
+            addOverlay();
+    		var minArea = minAreas[template];
+
+            document.querySelector('#slider-value').textContent = withCommas(area);
+    		
+    		var officePlan = document.querySelector('#office');
+
+    		var length = area / widths[template];
+
+            var camera = document.querySelector('#cam');
+            var orbit = camera.components['orbit-controls'];
+            orbit.target.set(10 - widths[template]/2, 0, length/2);
+            orbit.dolly.position.set(4-widths[template]/2 + -1/2 * Math.max(widths[template], length), 4+Math.max(widths[template], length), length/2 + Math.max(widths[template], length));
+            orbit.lookAtTarget(orbit.dolly, orbit.target);
+            orbit.scale = 1;
+            orbit.sphericalDelta.set(0, 0, 0);
+            orbit.updateView();
+
+    		var furnitureSets = Math.floor(length / furnitureSetLength);
+    		var furniturePadding = (length - (furnitureSetLength * furnitureSets)) / 2;
+    		
+    		var starts = furnitureSetXPositions[template];
+
+    		var furniture = document.querySelector("#furniture");
+    		while(furniture.firstChild) {
+    			furniture.removeChild(furniture.firstChild);
+    		}
+
+    		var furniturePositions = [];
+
+            var totalModels = 0;
+            var loaded = 0;
+
+            function modelLoaded() {
+                loaded++;
+                if(loaded >= totalModels) {
+                    removeOverlay();
+                }
+            }
+
+    		for(var i=0; i<starts.length; ++i) {
+    			var x = starts[i];
+
+    			for(var j=0;j<furnitureSets; ++j) {
+    				var z = furnitureZOffset + furniturePadding  + furnitureSetLength * j;
+    				furniturePositions.push(furniturePadding + furnitureSetLength * j);
+
+    				var ele = document.createElement('a-entity');
+    				ele.setAttribute("template", "src", "furniture.html");
+    				ele.setAttribute("position", x + " 0 " + z);
+    				furniture.appendChild(ele);
+
+    				ele.addEventListener("templaterendered", function templateLoaded() {
+                        ele.removeEventListener("templaterendered", templateLoaded);
+                        traverseNodes(ele, function(node) {
+                            if(node.hasAttribute('io3d-furniture')) {
+                                totalModels++;
+                                node.addEventListener('model-loaded', function onModel() {
+                                    node.removeEventListener('model-loaded', onModel);
+                                    modelLoaded();
+                                })
+                            }
+                        })
+                    });
+    			}
+    		}
+
+    		officePlan.setAttribute("data-length", length);
+    		officePlan.setAttribute("data-json-segments", JSON.stringify(furniturePositions));
+    		officePlan.setAttribute("template", "src", template + "#" + Math.floor(Math.random() * 1000000));
+
+    		// var camera = document.querySelector("#cam");
+    		// camera.setAttribute('position', cameraPositions[template]);
+    		// camera.updateComponents();
+
+    	}
+        
+        function removeOverlay() {
+            var overlay = document.querySelector('.overlay');
+            overlay.classList.remove("fadeIn");
+            overlay.classList.add("fadeOut");
+        }
+
+        function addOverlay() {
+            var overlay = document.querySelector('.overlay');
+            overlay.classList.remove("fadeOut");
+            overlay.classList.add("fadeIn");
+        }
+
+        function withCommas(x) {
+            return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+
+        function traverseNodes(root, func) {
+            var stack = [root];
+            while(stack.length > 0) {
+                var curr = stack.pop();
+                func(curr);
+                if(typeof curr.getChildren === "function") {
+                    stack.push.apply(stack, curr.getChildren());
+                }
+            }
+        }
+    </script>
+</body>
+</html>
